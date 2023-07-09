@@ -3,11 +3,12 @@ import { Render, Scene } from "./lib/Rasterize";
 import { GifFrame, GifUtil, GifCodec } from 'gifwrap';
 import { Cross, Normalize, Vec2, Vec3, Vec4, VectorMultiplyScalar } from "./lib/LinearAlgebra";
 import { Sphere, Triangle } from "./lib/Surface";
+import { max } from "./lib/Util";
 
 const SCREEN_RATIO = 16/9;
 const HEIGHT = 500;
 const WIDTH = HEIGHT;
-const FPS = 48;
+const FPS = 24;
 
 const exportSceneOrthographic = (scene:Scene, name: string) => {
   const imageBlock = Render(scene, WIDTH, HEIGHT,'orthographic');
@@ -70,13 +71,11 @@ const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, dur
     
     let data = Render(scene, WIDTH, HEIGHT,type).flat(3);
 
-    for(let i = 0; i < data.length; i++){
-      const c = data[i];
-
-      if(c < 0 || c > 255 || c !== Math.trunc(c)) throw new Error("Bad data " + i);
+    for(let d = 0; d < data.length; d ++){
+      data[d] = Math.min(data[d],255)
     }
 
-    const frame = new GifFrame(WIDTH, HEIGHT, new Buffer(data), {delayCentisecs: (1/FPS)*1000});
+    const frame = new GifFrame(WIDTH, HEIGHT, new Buffer(data), {delayCentisecs: (1/FPS)*100});
 
     return frame;
   })
@@ -166,7 +165,7 @@ const sphere = new Sphere(
   [0,0,0],
   5,
   [255,255,0,255],
-  16
+  100
 )
 
 const sphere2 = new Sphere(
@@ -196,19 +195,18 @@ const sphereScene = {
     lights: [
       {
         origin: [10,10,10] as Vec3,
-        intensity:[0.7,0.7,0.7,1] as Vec4
+        intensity:[0.5,0.5,0.5,1] as Vec4
       }
     ],
-    ambientConstant: 0.4,
-    phongExponent: 2
+    ambientConstant: 0.2,
+    phongExponent: 10
   }
 }
 
 console.profile();
-exportGifZAxisRotation('sphere',sphereScene, 15,2);
-// exportScenePerspective(sphereScene, 'testSphere')
-// exportSceneOrthographic(sphereScene, 'testSphere')
+exportGifZAxisRotation('./exports/sphere',sphereScene, 15,8);
+// exportScenePerspective(sphereScene, './exports/testSphere')
+// exportSceneOrthographic(sphereScene, './exports/testSphere')
 console.profileEnd();
 
-// why does it get darker (revert to ambience) as the details of the thing increase
-// pallete problem (related to detail size)
+// why is the x and y notation flipped? It seems wrong?

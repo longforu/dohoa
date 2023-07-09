@@ -39,17 +39,6 @@ export type Scene = {
 }
 
 const drawPixel = (image:Tensor, x:number, y:number, color:Vec4, z?:number, zBuffer?:Mat):Tensor => {
-  // see if it's int
-  if(x !== Math.ceil(x)){
-    drawPixel(image, Math.ceil(x), y, color, z, zBuffer);
-    drawPixel(image, Math.floor(x),y,color, z, zBuffer);
-    return image;
-  }
-  if(y !== Math.ceil(y)){
-    drawPixel(image, x, Math.ceil(y),color, z, zBuffer);
-    drawPixel(image,x,Math.floor(y),color, z, zBuffer);
-    return image;
-  }
   const x_int = Math.round(x);
   const y_int = image.length - Math.round(y);
 
@@ -167,7 +156,7 @@ export const drawTriangle = (image: Tensor, vertices: [Vec3, Vec3, Vec3], colors
   const x_max = Math.ceil(Math.max(...vertices.map(([x])=>x)));
 
   const y_min = Math.floor(Math.min(...vertices.map(([_,y]) => y)));
-  const y_max = Math.floor(Math.max(...vertices.map(([_,y]) => y)));
+  const y_max = Math.ceil(Math.max(...vertices.map(([_,y]) => y)));
 
   const [[x_0,y_0,z_0],[x_1,y_1,z_1],[x_2,y_2,z_2]] = vertices;
   const [c_0,c_1,c_2] = colors; 
@@ -223,14 +212,12 @@ export const lightPoint = (point: Vec3, normal: Vec3, color: Vec4, config: Light
 
     const cl = HademardV(c_o, intensity.slice(0,3) as Vec3);
     
-    // why is it just the ambient here
-
     // lambertian shading
     c = VectorAdd(c, VectorMultiplyScalar(cl, Math.max(0, Dot(normal,l)))) as Vec3;
     
     // phong shading
     const h = Normalize(VectorAdd(eyeOrigin,l));
-    c = VectorAdd(c, VectorMultiplyScalar(intensity.slice(0,3) as Vec3, Math.pow(Dot(h,normal),phongExponent))) as Vec3;
+    c = VectorAdd(c,HademardV([255,255,255], VectorMultiplyScalar(intensity.slice(0,3) as Vec3, Math.pow(Dot(h,normal),phongExponent)))) as Vec3;
   }
   return [...c,255] as Vec4;
 }

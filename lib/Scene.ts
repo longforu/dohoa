@@ -61,7 +61,7 @@ export const light:LightPoint = (ray, scene) => {
       c = VA(c, MV(HademardV(color, currentLight.intensity), Math.max(0, Dot(normal, l))))
 
       // apply Phong shading
-      const h = Normalize(VA(v,l))
+      const h = Normalize(VA(v,l));
 
       c = VA(c, MV(HademardV(specularColor, currentLight.intensity), Math.pow(Math.max(0, Dot(normal,h)),scene.phongExponent)))
     }

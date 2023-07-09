@@ -37,7 +37,7 @@ export class Triangle extends Surface {
   normal(){
     const v1 = VectorAdd(this.vertices[0], VectorMultiplyScalar(this.vertices[1],-1)) as Vec3;
     const v2 = VectorAdd(this.vertices[0], VectorMultiplyScalar(this.vertices[2],-1)) as Vec3;
-    return Cross(v1,v2) as Vec3;
+    return Normalize(Cross(v1,v2)) as Vec3;
   }
 
   mesh(){
