@@ -1,7 +1,8 @@
 import Jimp from "jimp";
-import { OrthographicRender, PerspectiveRender, Scene } from "./lib/Rasterize";
+import { Render, Scene } from "./lib/Rasterize";
 import { GifFrame, GifUtil, GifCodec } from 'gifwrap';
 import { Cross, Normalize, Vec2, Vec3, Vec4, VectorMultiplyScalar } from "./lib/LinearAlgebra";
+import { Sphere, Triangle } from "./lib/Surface";
 
 const SCREEN_RATIO = 16/9;
 const HEIGHT = 500;
@@ -9,7 +10,7 @@ const WIDTH = HEIGHT;
 const FPS = 48;
 
 const exportSceneOrthographic = (scene:Scene, name: string) => {
-  const imageBlock = OrthographicRender(scene, WIDTH, HEIGHT);
+  const imageBlock = Render(scene, WIDTH, HEIGHT,'orthographic');
 
   const image = new Jimp(WIDTH,HEIGHT, 'black');
   
@@ -30,7 +31,7 @@ const exportSceneOrthographic = (scene:Scene, name: string) => {
 }
 
 const exportScenePerspective = (scene:Scene, name: string) => {
-  const imageBlock = PerspectiveRender(scene, WIDTH, HEIGHT);
+  const imageBlock = Render(scene, WIDTH, HEIGHT);
 
   const image = new Jimp(WIDTH,HEIGHT, 'black');
   
@@ -50,12 +51,12 @@ const exportScenePerspective = (scene:Scene, name: string) => {
   image.write(name+'_ltperspective.'+image.getExtension());
 }
 
-const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, duration: number) => {
+const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, duration: number, type:"perspective"|"orthographic" = "perspective") => {
   const pixelDelta = (1/(FPS*duration))*(2*Math.PI);
   const angles = Array(duration*FPS).fill('').map((_,i) => i*pixelDelta);
   const origin = angles.map((a) => ([radius*Math.cos(a), radius*Math.sin(a),0] as Vec3));
   const direction = origin.map(o => VectorMultiplyScalar(o, -1) as Vec3);
-  const up = direction.map(d => Cross(d,[0,0,1]) as Vec3);
+  const up = direction.map(d => Cross([0,0,1],d) as Vec3);
 
   const frames = up.map((u,i) => {
     console.log('Rendering Frame ' + i + ' of ' + duration*FPS);
@@ -67,26 +68,22 @@ const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, dur
     scene.camera.direction = d;
     scene.camera.top = u;
     
-    const orthoData = new Buffer(OrthographicRender(scene, WIDTH, HEIGHT).flat(3));
-    const perspectiveData = new Buffer(PerspectiveRender(scene,WIDTH,HEIGHT).flat(3));
+    let data = Render(scene, WIDTH, HEIGHT,type).flat(3);
 
-    const orthoFrame = new GifFrame(WIDTH, HEIGHT, orthoData, {delayCentisecs: (1/FPS)*1000});
-    const perspectiveFrame = new GifFrame(WIDTH, HEIGHT, perspectiveData, {delayCentisecs: (1/FPS)*1000});
+    for(let i = 0; i < data.length; i++){
+      const c = data[i];
 
-    return [orthoFrame, perspectiveFrame];
+      if(c < 0 || c > 255 || c !== Math.trunc(c)) throw new Error("Bad data " + i);
+    }
+
+    const frame = new GifFrame(WIDTH, HEIGHT, new Buffer(data), {delayCentisecs: (1/FPS)*1000});
+
+    return frame;
   })
 
-  const orthoFrames = frames.map(e => e[0]);
-  const perspectiveFrames = frames.map(e => e[1]);
-
   console.log('Writing to files...');
-  GifUtil.write(filename + '_ltortho_rotation.gif', orthoFrames, {loops:0});
-  GifUtil.write(filename + '_ltperspective_rotation.gif', perspectiveFrames, {loops:0});
+  GifUtil.write(filename + `_lt_rotation_${type}.gif`, frames, {loops:0});
 }
-
-const angle = (1/12)*Math.PI;
-
-const coords = Array(24).fill('').map((_,i) => [5*Math.cos(angle*i), 5*Math.sin(angle*i)])
 
 const VVS = 10
 
@@ -95,90 +92,123 @@ const viewVolume = {
   right: VVS,
   bottom: -VVS,
   top: VVS,
-  near: VVS,
-  far: -VVS
+  near: -VVS,
+  far: VVS
 }
 
-const Star:Scene = {
-  viewVolume,
+// const Cube:Scene = {
+//   viewVolume,
 
-  camera: {
-    origin: [-100,0,0],
-    direction: [-1,0,0],
-    top: [0,1,0]
-  },
+//   camera: {
+//     origin: [0,0,0],
+//     direction: [0,0,0],
+//     top: [0,0,0]
+//   },
 
-  lines: coords.map(([x,y]) => [
-    [0,0,0],
-    [0,x,y]
-  ])
-}
-
-const Cube:Scene = {
-  viewVolume,
-
-  camera: {
-    origin: [0,0,0],
-    direction: [0,0,0],
-    top: [0,0,0]
-  },
-
-  lines: [
-    // top face
-    [
-      [5,5,5],
-      [-5,5,5]
-    ],
-    [
-      [5,5,5],
-      [5,-5,5]
-    ],
-    [
-      [-5,5,5],
-      [-5,-5,5]
-    ],
-    [
-      [-5,-5,5],
-      [5,-5,5]
-    ],
-    //bottom face
-    [
-      [5,5,-5],
-      [-5,5,-5]
-    ],
-    [
-      [5,5,-5],
-      [5,-5,-5]
-    ],
-    [
-      [-5,5,-5],
-      [-5,-5,-5]
-    ],
+//   lines: [
+//     // top face
+//     [
+//       [5,5,5],
+//       [-5,5,5]
+//     ],
+//     [
+//       [5,5,5],
+//       [5,-5,5]
+//     ],
+//     [
+//       [-5,5,5],
+//       [-5,-5,5]
+//     ],
+//     [
+//       [-5,-5,5],
+//       [5,-5,5]
+//     ],
+//     //bottom face
+//     [
+//       [5,5,-5],
+//       [-5,5,-5]
+//     ],
+//     [
+//       [5,5,-5],
+//       [5,-5,-5]
+//     ],
+//     [
+//       [-5,5,-5],
+//       [-5,-5,-5]
+//     ],
     
-    [
-      [-5,-5,-5],
-      [5,-5,-5]
+//     [
+//       [-5,-5,-5],
+//       [5,-5,-5]
+//     ],
+//     //suport
+//     [
+//       [5,5,5],
+//       [5,5,-5]
+//     ],
+//     [
+//       [-5,5,5],
+//       [-5,5,-5]
+//     ],
+//     [
+//       [-5,-5,5],
+//       [-5,-5,-5]
+//     ],
+//     [
+//       [5,-5,5],
+//       [5,-5,-5]
+//     ]
+//   ],
+//   surfaces:[]
+// }
+
+const sphere = new Sphere(
+  [0,0,0],
+  5,
+  [255,255,0,255],
+  16
+)
+
+const sphere2 = new Sphere(
+  [0,8,0],
+  2,
+  [0,0,255,255],
+  16
+)
+
+// console.log(sphere.mesh().map(e => e.vertices));
+
+const sphereScene = {
+  viewVolume,
+
+  camera: {
+    origin: [0,-10,0] as Vec3,
+    direction: [0,1,0] as Vec3,
+    top: [1,0,0] as Vec3
+  },
+
+  lines: [],
+  surfaces:[
+    sphere,
+    sphere2
+  ],
+  lightConfig: {
+    lights: [
+      {
+        origin: [10,10,10] as Vec3,
+        intensity:[0.7,0.7,0.7,1] as Vec4
+      }
     ],
-    //suport
-    [
-      [5,5,5],
-      [5,5,-5]
-    ],
-    [
-      [-5,5,5],
-      [-5,5,-5]
-    ],
-    [
-      [-5,-5,5],
-      [-5,-5,-5]
-    ],
-    [
-      [5,-5,5],
-      [5,-5,-5]
-    ]
-  ]
+    ambientConstant: 0.4,
+    phongExponent: 2
+  }
 }
 
 console.profile();
-exportGifZAxisRotation('cube',Cube, 15,2);
+exportGifZAxisRotation('sphere',sphereScene, 15,2);
+// exportScenePerspective(sphereScene, 'testSphere')
+// exportSceneOrthographic(sphereScene, 'testSphere')
 console.profileEnd();
+
+// why does it get darker (revert to ambience) as the details of the thing increase
+// pallete problem (related to detail size)
