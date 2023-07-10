@@ -1,14 +1,34 @@
-import Jimp from "jimp";
+import Jimp, {} from "jimp";
 import { Render, Scene } from "./lib/Rasterize";
-import { GifFrame, GifUtil, GifCodec } from 'gifwrap';
+import { GifFrame, GifUtil, GifCodec, BitmapImage } from 'gifwrap';
 import { Cross, Normalize, Vec2, Vec3, Vec4, VectorMultiplyScalar } from "./lib/LinearAlgebra";
 import { Sphere, Triangle } from "./lib/Surface";
-import { max } from "./lib/Util";
+//@ts-ignore
+import videoshow from 'videoshow';
+import JPEG from 'jpeg-js';
+import fs from 'fs';
+import path from 'path';
+import { SphericalMap, Sprite, Texture } from "./lib/Texture";
+import { Promisify } from "./lib/Util";
 
-const SCREEN_RATIO = 16/9;
+Jimp.decoders['image/jpeg'] = (data) => JPEG.decode(data, {
+	maxMemoryUsageInMB: 6144,
+	maxResolutionInMP: 600
+});
+
 const HEIGHT = 500;
 const WIDTH = HEIGHT;
-const FPS = 24;
+const FPS = 12;
+
+const videoshowPromise = Promisify((onload,images,videoOptions,path) => {
+  videoshow(images,videoOptions).save(path).on('end', (output:any) => onload(output));
+})
+
+const spritePromise = Promisify((onload,path) => {
+  const sprite = new Sprite(path, () => {
+    onload(sprite);
+  })
+})
 
 const exportSceneOrthographic = (scene:Scene, name: string) => {
   const imageBlock = Render(scene, WIDTH, HEIGHT,'orthographic');
@@ -28,7 +48,13 @@ const exportSceneOrthographic = (scene:Scene, name: string) => {
       image.setPixelColor(Jimp.rgbaToInt(...(pixel as Vec4)),j,i);
     }
   }
-  image.write(name+'_ltortho.'+image.getExtension());
+
+  const filePath = name + '_ltortho.' + image.getExtension();
+   return new Promise((resolve) => {
+    image.write(filePath, () => {
+      resolve(filePath);
+    })
+  })
 }
 
 const exportScenePerspective = (scene:Scene, name: string) => {
@@ -49,18 +75,28 @@ const exportScenePerspective = (scene:Scene, name: string) => {
       image.setPixelColor(Jimp.rgbaToInt(...(pixel as Vec4)),j,i);
     }
   }
-  image.write(name+'_ltperspective.'+image.getExtension());
+  const filePath = name + '_ltperspective.' + image.getExtension();
+  return new Promise((resolve) => {
+    image.write(filePath, () => {
+      resolve(filePath);
+    })
+  })
 }
 
-const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, duration: number, type:"perspective"|"orthographic" = "perspective") => {
+const exportGifZAxisRotation = async (filename:string,scene:Scene, radius: number, duration: number, type:"perspective"|"orthographic" = "perspective") => {
   const pixelDelta = (1/(FPS*duration))*(2*Math.PI);
   const angles = Array(duration*FPS).fill('').map((_,i) => i*pixelDelta);
   const origin = angles.map((a) => ([radius*Math.cos(a), radius*Math.sin(a),0] as Vec3));
   const direction = origin.map(o => VectorMultiplyScalar(o, -1) as Vec3);
-  const up = direction.map(d => Cross([0,0,1],d) as Vec3);
+  const up = direction.map(d => Cross([0, 0, 1], d) as Vec3);
+  
+  // make temp frame folder
+  if(!fs.existsSync('./temp')) fs.mkdirSync('./temp')
+  if(!fs.existsSync('./temp/'+filename)) fs.mkdirSync('./temp/'+filename)
 
-  const frames = up.map((u,i) => {
-    console.log('Rendering Frame ' + i + ' of ' + duration*FPS);
+
+  const frames = await Promise.all(up.map((u, i) => {
+    console.log('Rendering Frame ' + i + ' of ' + duration * FPS);
     
     const e = origin[i];
     const d = direction[i];
@@ -69,19 +105,17 @@ const exportGifZAxisRotation = (filename:string,scene:Scene, radius: number, dur
     scene.camera.direction = d;
     scene.camera.top = u;
     
-    let data = Render(scene, WIDTH, HEIGHT,type).flat(3);
-
-    for(let d = 0; d < data.length; d ++){
-      data[d] = Math.min(data[d],255)
-    }
-
-    const frame = new GifFrame(WIDTH, HEIGHT, new Buffer(data), {delayCentisecs: (1/FPS)*100});
-
-    return frame;
-  })
+    return (type === 'perspective' ? exportScenePerspective : exportSceneOrthographic)(scene, path.join(__dirname, '/temp/', filename, `${i}`));
+  }));
 
   console.log('Writing to files...');
-  GifUtil.write(filename + `_lt_rotation_${type}.gif`, frames, {loops:0});
+  return videoshowPromise(frames, {
+    fps: FPS,
+    format: 'mp4',
+    size: WIDTH.toString() + "x" + HEIGHT.toString(),
+    transition: false,
+    loop: 0.1,
+  },'./exports/'+filename+'_'+type+'.mp4')
 }
 
 const VVS = 10
@@ -93,120 +127,53 @@ const viewVolume = {
   top: VVS,
   near: -VVS,
   far: VVS
-}
+};
 
-// const Cube:Scene = {
-//   viewVolume,
-
-//   camera: {
-//     origin: [0,0,0],
-//     direction: [0,0,0],
-//     top: [0,0,0]
-//   },
-
-//   lines: [
-//     // top face
-//     [
-//       [5,5,5],
-//       [-5,5,5]
-//     ],
-//     [
-//       [5,5,5],
-//       [5,-5,5]
-//     ],
-//     [
-//       [-5,5,5],
-//       [-5,-5,5]
-//     ],
-//     [
-//       [-5,-5,5],
-//       [5,-5,5]
-//     ],
-//     //bottom face
-//     [
-//       [5,5,-5],
-//       [-5,5,-5]
-//     ],
-//     [
-//       [5,5,-5],
-//       [5,-5,-5]
-//     ],
-//     [
-//       [-5,5,-5],
-//       [-5,-5,-5]
-//     ],
+(async () => {
+  const earthSprite = await spritePromise(path.join(__dirname, './textures/earth.jpg')) as Sprite;
+  const sphere = new Sphere(
+    [0, 0, 0],
+    7,
+    new SphericalMap([0, 0, 0], 7, [255, 255, 255], earthSprite),
+    300
+  )
+  
+  const sphere2 = new Sphere(
+    [0, 8, 0],
+    2,
+    new Texture([0, 255, 0]),
+    16
+  )
     
-//     [
-//       [-5,-5,-5],
-//       [5,-5,-5]
-//     ],
-//     //suport
-//     [
-//       [5,5,5],
-//       [5,5,-5]
-//     ],
-//     [
-//       [-5,5,5],
-//       [-5,5,-5]
-//     ],
-//     [
-//       [-5,-5,5],
-//       [-5,-5,-5]
-//     ],
-//     [
-//       [5,-5,5],
-//       [5,-5,-5]
-//     ]
-//   ],
-//   surfaces:[]
-// }
-
-const sphere = new Sphere(
-  [0,0,0],
-  5,
-  [255,255,0,255],
-  100
-)
-
-const sphere2 = new Sphere(
-  [0,8,0],
-  2,
-  [0,0,255,255],
-  16
-)
-
-// console.log(sphere.mesh().map(e => e.vertices));
-
-const sphereScene = {
-  viewVolume,
-
-  camera: {
-    origin: [0,-10,0] as Vec3,
-    direction: [0,1,0] as Vec3,
-    top: [1,0,0] as Vec3
-  },
-
-  lines: [],
-  surfaces:[
-    sphere,
-    sphere2
-  ],
-  lightConfig: {
-    lights: [
-      {
-        origin: [10,10,10] as Vec3,
-        intensity:[0.5,0.5,0.5,1] as Vec4
-      }
+  const sphereScene = {
+    viewVolume,
+  
+    camera: {
+      origin: [0, -10, 0] as Vec3,
+      direction: [0, 1, 0] as Vec3,
+      top: [1, 0, 0] as Vec3
+    },
+  
+    lines: [],
+    surfaces: [
+      sphere,
+      // sphere2
     ],
-    ambientConstant: 0.2,
-    phongExponent: 10
+    lightConfig: {
+      lights: [
+        {
+          origin: [15, 15, 15] as Vec3,
+          intensity: [0.5, 0.5, 0.5, 1] as Vec4
+        }
+      ],
+      ambientConstant: 0.2,
+      phongExponent: 10
+    }
   }
-}
 
-console.profile();
-exportGifZAxisRotation('./exports/sphere',sphereScene, 15,8);
-// exportScenePerspective(sphereScene, './exports/testSphere')
-// exportSceneOrthographic(sphereScene, './exports/testSphere')
-console.profileEnd();
+  // exportScenePerspective(sphereScene, './exports/testSphere');
+  await exportGifZAxisRotation('earth_big', sphereScene, 15, 3);
+  console.log('done');
+})();
 
 // why is the x and y notation flipped? It seems wrong?

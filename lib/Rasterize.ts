@@ -250,12 +250,11 @@ export const Render:Render = (scene,width,height,type="perspective") => {
     const mesh = surface.mesh();
     for(const triangle of mesh){
       const {vertices} = triangle;
-      const color = triangle.color();
       const normal = triangle.normal();
 
       const [[x_0,y_0,z_0,w_0],[x_1,y_1,z_1,w_1],[x_2,y_2,z_2,w_2]] = vertices.map((v) => transform([...v,1]));
 
-      const [c_1,c_2,c_3] = vertices.map(v => lightPoint(v, normal, color, scene.lightConfig, scene.camera.origin));
+      const [c_1,c_2,c_3] = vertices.map(v => lightPoint(v, normal, [...surface.texture.color(v),255], scene.lightConfig, scene.camera.origin));
       
       drawTriangle(image, [
         [x_0/w_0, y_0/w_0,z_0/w_0],

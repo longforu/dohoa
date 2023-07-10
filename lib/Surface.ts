@@ -1,4 +1,5 @@
 import { Cross, Dot, Normalize, Vec2, Vec3, Vec4, VectorAdd, VectorMultiplyScalar } from "./LinearAlgebra";
+import { Texture } from "./Texture";
 
 export type Ray = {
   origin: Vec3;
@@ -6,12 +7,18 @@ export type Ray = {
 }
 
 export class Surface {
+  texture:Texture;
+  
+  constructor(texture:Texture){
+    this.texture = texture;
+  }
+
   hit(ray:Ray):number{
     return -1;
   }
 
   normal(point:Vec3):Vec3 {
-    return [0, 0, 0];
+    return this.texture.color(point);
   }
 
   color(point:Vec4):Vec4 {
@@ -25,13 +32,10 @@ export class Surface {
 
 export class Triangle extends Surface {
   vertices: [Vec3, Vec3, Vec3];
-  surfaceColor: Vec4;
 
-  constructor(vertices: [Vec3, Vec3, Vec3], color: Vec4) {
-    super();
+  constructor(vertices: [Vec3, Vec3, Vec3], texture:Texture) {
+    super(texture);
     this.vertices = vertices;
-    this.surfaceColor = color;
-
   }
 
   normal(){
@@ -43,23 +47,17 @@ export class Triangle extends Surface {
   mesh(){
     return [this];
   }
-
-  color(){
-    return this.surfaceColor;
-  }
 }
 
 export class Sphere extends Surface {
   center: Vec3;
   radius: number;
-  surfaceColor: Vec4;
   triangleMesh: Triangle[]
 
 
-  constructor(center: Vec3, radius: number, color : Vec4, detail:number) {
-    super();
+  constructor(center: Vec3, radius: number, texture: Texture, detail:number) {
+    super(texture);
     this.center = center;
-    this.surfaceColor = color;
     this.radius = radius;
 
     // calculate mesh 
@@ -132,11 +130,7 @@ export class Sphere extends Surface {
       radius*Math.sin(phi)
     ],center) as Vec3) as [Vec3,Vec3,Vec3]);
 
-    this.triangleMesh = triangleCoords.map(c => new Triangle(c, this.surfaceColor));
-  }
-
-  color(){
-    return this.surfaceColor;
+    this.triangleMesh = triangleCoords.map(c => new Triangle(c, new Texture([255,255,255])));
   }
 
   normal(point:Vec3):Vec3 {
