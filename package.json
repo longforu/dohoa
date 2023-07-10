@@ -15,6 +15,7 @@
     "dom-walk": "^0.1.2",
     "exif-parser": "^0.1.12",
     "file-type": "^16.5.4",
+    "fluent-ffmpeg": "^2.1.2",
     "gifwrap": "^0.10.1",
     "global": "^4.4.0",
     "hex-to-rgba": "^2.0.1",
@@ -55,7 +56,6 @@
     "tr46": "^0.0.3",
     "utif2": "^4.1.0",
     "util-deprecate": "^1.0.2",
-    "videoshow": "^0.1.12",
     "webidl-conversions": "^3.0.1",
     "whatwg-fetch": "^3.6.2",
     "whatwg-url": "^5.0.0",
@@ -70,5 +70,8 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.21"
+  }
 }

@@ -4,12 +4,12 @@ import { GifFrame, GifUtil, GifCodec, BitmapImage } from 'gifwrap';
 import { Cross, Normalize, Vec2, Vec3, Vec4, VectorMultiplyScalar } from "./lib/LinearAlgebra";
 import { Sphere, Triangle } from "./lib/Surface";
 //@ts-ignore
-import videoshow from 'videoshow';
 import JPEG from 'jpeg-js';
 import fs from 'fs';
 import path from 'path';
 import { SphericalMap, Sprite, Texture } from "./lib/Texture";
 import { Promisify } from "./lib/Util";
+import { execSync } from 'child_process';
 
 Jimp.decoders['image/jpeg'] = (data) => JPEG.decode(data, {
 	maxMemoryUsageInMB: 6144,
@@ -20,8 +20,24 @@ const HEIGHT = 500;
 const WIDTH = HEIGHT;
 const FPS = 12;
 
-const videoshowPromise = Promisify((onload,images,videoOptions,path) => {
-  videoshow(images,videoOptions).save(path).on('end', (output:any) => onload(output));
+const videoshowPromise = Promisify((onload, images, videoOptions, outputPath) => {
+  if (!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+  if (!fs.existsSync('./temp/render')) fs.mkdirSync('./temp/render');
+  
+  const tempPath = path.join(__dirname, 'temp', 'render');
+
+  // move the image
+
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i];
+    fs.copyFileSync(image, path.join(tempPath, i.toString().padStart(3,'0') + '.png'));
+  }
+
+  // execute 
+  console.log(tempPath, outputPath);
+  execSync(`ffmpeg -y -r ${FPS} -i "${tempPath}/%03d.png" "${outputPath}"`);
+
+  onload(true);
 })
 
 const spritePromise = Promisify((onload,path) => {
@@ -110,12 +126,9 @@ const exportGifZAxisRotation = async (filename:string,scene:Scene, radius: numbe
 
   console.log('Writing to files...');
   return videoshowPromise(frames, {
-    fps: FPS,
-    format: 'mp4',
     size: WIDTH.toString() + "x" + HEIGHT.toString(),
-    transition: false,
-    loop: 0.1,
-  },'./exports/'+filename+'_'+type+'.mp4')
+    loop: 1/FPS,
+  }, path.join(__dirname,'./exports/',filename+'_'+type+'.mp4'))
 }
 
 const VVS = 10
@@ -130,7 +143,7 @@ const viewVolume = {
 };
 
 (async () => {
-  const earthSprite = await spritePromise(path.join(__dirname, './textures/earth.jpg')) as Sprite;
+  const earthSprite = await spritePromise(path.join(__dirname, './textures/earth_small.png')) as Sprite;
   const sphere = new Sphere(
     [0, 0, 0],
     7,
@@ -172,7 +185,7 @@ const viewVolume = {
   }
 
   // exportScenePerspective(sphereScene, './exports/testSphere');
-  await exportGifZAxisRotation('earth_big', sphereScene, 15, 3);
+  await exportGifZAxisRotation('earth', sphereScene, 15, 3);
   console.log('done');
 })();
 
